@@ -4,11 +4,14 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8000 \
+    PATH="/root/.local/bin:/usr/local/bin:$PATH"
 
-# Install minimal system dependencies required for PyTorch OpenMP and imaging
+# Install system dependencies required for OpenCV, PyTorch OpenMP, and imaging
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libgl1 \
+    libglib2.0-0 \
     libgomp1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -32,5 +35,5 @@ RUN mkdir -p uploads/results static templates
 # Expose default port
 EXPOSE 8000
 
-# Start server dynamically bound to $PORT (compatible with Render, Railway, Fly.io, etc.)
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Start server using python -m uvicorn dynamically bound to $PORT
+CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
