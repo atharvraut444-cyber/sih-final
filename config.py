@@ -12,8 +12,15 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 MODELS_DIR = BASE_DIR / "models"
 
-# On Vercel / serverless platforms, only /tmp is writable
-if os.environ.get("VERCEL"):
+# Detect Serverless (Vercel, AWS Lambda) or any read-only deployment environment
+IS_SERVERLESS = bool(
+    os.environ.get("VERCEL")
+    or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+    or os.environ.get("LAMBDA_TASK_ROOT")
+    or not os.access(str(BASE_DIR), os.W_OK)
+)
+
+if IS_SERVERLESS:
     UPLOADS_DIR = Path("/tmp/uploads")
 else:
     UPLOADS_DIR = BASE_DIR / "uploads"
@@ -21,9 +28,13 @@ else:
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 
-# Ensure required directories exist
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-(UPLOADS_DIR / "results").mkdir(parents=True, exist_ok=True)
+# Ensure upload directories exist safely without throwing read-only filesystem errors
+try:
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    (UPLOADS_DIR / "results").mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
+
 
 
 # ─── Model Configuration ────────────────────────────────────────

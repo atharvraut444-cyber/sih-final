@@ -58,15 +58,19 @@ async def lifespan(app: FastAPI):
     logger.info("  SENORITA — SSS Marine Debris Detection API starting up")
     logger.info("=" * 60)
 
-    # Ensure required directories exist
-    UPLOADS_DIR.mkdir(exist_ok=True)
-    (UPLOADS_DIR / "results").mkdir(exist_ok=True)
-    STATIC_DIR.mkdir(exist_ok=True)
-    TEMPLATES_DIR.mkdir(exist_ok=True)
+    # Ensure required directories exist safely
+    for d in [UPLOADS_DIR, UPLOADS_DIR / "results", STATIC_DIR, TEMPLATES_DIR]:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
 
-    # Pre-load the detection pipeline (loads YOLOv8 weights)
-    pipeline = get_pipeline()
-    logger.info(f"Model loaded: {pipeline.model_info}")
+    # Pre-load the detection pipeline (loads weights or starts heuristic mode)
+    try:
+        pipeline = get_pipeline()
+        logger.info(f"Model loaded: {pipeline.model_info}")
+    except Exception as e:
+        logger.warning(f"Pipeline initial pre-load deferred: {e}")
 
     yield  # ← server is running
 
@@ -108,11 +112,13 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Serve /uploads/* so the frontend can display uploaded/result images
-app.mount(
-    "/uploads",
-    StaticFiles(directory=str(UPLOADS_DIR)),
-    name="uploads",
-)
+if UPLOADS_DIR.exists():
+    app.mount(
+        "/uploads",
+        StaticFiles(directory=str(UPLOADS_DIR)),
+        name="uploads",
+    )
+
 
 
 # ─── API Routes ───────────────────────────────────────────────────────────────

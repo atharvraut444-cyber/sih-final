@@ -76,22 +76,29 @@ class SonarPreprocessor:
         # process-spawn overhead that would otherwise be paid on every NLM call.
         self._nlm_pool: Optional[ProcessPoolExecutor] = None
 
-    def _get_nlm_pool(self) -> ProcessPoolExecutor:
+    def _get_nlm_pool(self) -> Optional[ProcessPoolExecutor]:
         """Return (and lazily create) the persistent NLM worker pool."""
         if self._nlm_pool is None:
-            self._nlm_pool = ProcessPoolExecutor(max_workers=1)
+            try:
+                self._nlm_pool = ProcessPoolExecutor(max_workers=1)
+            except Exception as e:
+                logger.warning(f"ProcessPoolExecutor disabled (serverless environment): {e}")
+                self._nlm_pool = None
         return self._nlm_pool
 
     def warm_start(self):
         """Pre-warm the NLM ProcessPoolExecutor to eliminate first-frame latency penalty (T3-A)."""
-        pool = self._get_nlm_pool()
-        dummy = np.zeros((16, 16), dtype=np.uint8)
         try:
+            pool = self._get_nlm_pool()
+            if pool is None:
+                return
+            dummy = np.zeros((16, 16), dtype=np.uint8)
             future = pool.submit(_nlm_worker, dummy, 3.0, 7, 21)
             future.result(timeout=5.0)
             logger.info("SonarPreprocessor NLM pool pre-warmed successfully.")
         except Exception as e:
             logger.warning(f"SonarPreprocessor pool warm start failed: {e}")
+
 
     def __del__(self):
         """Shut down the NLM worker pool on garbage-collection."""
@@ -315,6 +322,14 @@ class SonarPreprocessor:
         """
         try:
             pool = self._get_nlm_pool()
+            if pool is None:
+                # Direct in-process execution when multiprocessing is disabled (serverless)
+                return cv2.fastNlMeansDenoising(
+                    image,
+                    h=h,
+                    templateWindowSize=template_window,
+                    searchWindowSize=search_window,
+                )
             future = pool.submit(_nlm_worker, image, h, template_window, search_window)
             try:
                 return future.result(timeout=NLM_TIMEOUT_SECONDS)
