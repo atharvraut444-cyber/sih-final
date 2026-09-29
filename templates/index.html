@@ -1,0 +1,2375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENORITA — SSS Marine Debris Detection & Geotagging Dashboard</title>
+<meta name="description" content="State-of-the-art Side-Scan Sonar marine debris detection and hydrographic geotagging dashboard.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ── Theme Tokens & Reset ─────────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg-deep:      #050c18;
+  --bg-panel:     #0a1526;
+  --bg-card:      #0e1e36;
+  --bg-card-hover:#142745;
+  --border:       #162e4f;
+  --border-lit:   #255085;
+  --accent-cyan:  #00d4ff;
+  --accent-teal:  #06b6d4;
+  --accent-blue:  #3b82f6;
+  --text-1:       #f1f7ff;
+  --text-2:       #93b7de;
+  --text-3:       #4c7099;
+  --critical:     #ff4757;
+  --critical-dim: rgba(255, 71, 87, 0.18);
+  --moderate:     #ffa502;
+  --moderate-dim: rgba(255, 165, 2, 0.18);
+  --low:          #2ed573;
+  --low-dim:      rgba(46, 213, 115, 0.18);
+  --negligible:   #747d8c;
+  --radius-sm:    6px;
+  --radius-md:    10px;
+  --radius-lg:    14px;
+}
+html, body {
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-1);
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-panel); }
+::-webkit-scrollbar-thumb { background: var(--border-lit); border-radius: 4px; }
+
+/* ── App Shell ───────────────────────────────────────────────── */
+#app {
+  display: grid;
+  grid-template-rows: 58px auto 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Top Header ──────────────────────────────────────────────── */
+header {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  gap: 14px;
+  z-index: 30;
+}
+.logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-badge {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #00d4ff22, #06b6d444);
+  border: 1px solid var(--accent-cyan);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.15rem;
+  box-shadow: 0 0 14px rgba(0,212,255,0.25);
+}
+.logo-title {
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.logo-title span { color: var(--accent-cyan); }
+.logo-sub {
+  font-size: 0.65rem;
+  color: var(--text-3);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.v-sep { width: 1px; height: 26px; background: var(--border); }
+
+/* Mode Switcher Tabs */
+.mode-tabs {
+  display: flex;
+  background: var(--bg-card);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  gap: 2px;
+}
+.mode-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  padding: 5px 12px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mode-tab:hover { color: var(--text-1); }
+.mode-tab.active {
+  background: linear-gradient(135deg, #00d4ff22, #007a9944);
+  border: 1px solid var(--accent-cyan);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+}
+
+/* Header Telemetry Pills */
+.telemetry-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.stat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 6px;
+}
+.stat-pill .val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.stat-pill .lbl {
+  font-size: 0.58rem;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 4px 12px;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.pulse-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--negligible);
+}
+.pulse-dot.live {
+  background: var(--low);
+  box-shadow: 0 0 8px var(--low);
+  animation: pulseAnim 1.6s infinite;
+}
+.pulse-dot.busy {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
+  animation: pulseAnim 1s infinite;
+}
+@keyframes pulseAnim {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-ui {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  padding: 6px 13px;
+  border-radius: var(--radius-sm);
+  font-size: 0.76rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+.btn-ui:hover {
+  border-color: var(--border-lit);
+  color: var(--text-1);
+  background: var(--bg-card-hover);
+}
+.btn-ui.primary {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(6, 182, 212, 0.3));
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+.btn-ui.primary:hover {
+  background: var(--accent-cyan);
+  color: #050c18;
+  box-shadow: 0 0 14px rgba(0, 212, 255, 0.4);
+}
+.btn-ui.danger:hover {
+  border-color: var(--critical);
+  color: var(--critical);
+}
+
+/* ── Secondary Geotagging & Survey Bar ────────────────────────── */
+#geotag-subbar {
+  background: #07101e;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 6px 18px;
+  gap: 14px;
+  font-size: 0.72rem;
+  color: var(--text-2);
+  overflow-x: auto;
+}
+.geo-badge {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.geo-badge span.k { color: var(--text-3); text-transform: uppercase; font-size: 0.62rem; }
+.geo-badge span.v { font-family: 'JetBrains Mono', monospace; color: var(--accent-cyan); font-weight: 600; }
+.geo-tag-physics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.physics-pill {
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 99px;
+  padding: 2px 9px;
+  font-size: 0.65rem;
+  color: var(--accent-cyan);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.physics-pill.ok::before {
+  content: "✓";
+  color: var(--low);
+  font-weight: 700;
+}
+
+/* ── Collapsible Survey Config Drawer ─────────────────────────── */
+#survey-drawer {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-lit);
+  display: none;
+  padding: 14px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) auto;
+  gap: 12px;
+  align-items: flex-end;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  animation: drawerSlide 0.25s ease-out;
+}
+#survey-drawer.open { display: grid; }
+@keyframes drawerSlide { from { transform: translateY(-10px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.cfg-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cfg-lbl {
+  font-size: 0.68rem;
+  color: var(--text-2);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.cfg-input, .cfg-select {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.cfg-input:focus, .cfg-select:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+}
+
+/* ── Main 3-Column Grid ──────────────────────────────────────── */
+#main-view {
+  display: grid;
+  grid-template-columns: 330px 1fr 340px;
+  gap: 10px;
+  padding: 10px;
+  overflow: hidden;
+}
+
+/* Panel Containers */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+.panel-header {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background: rgba(14, 30, 54, 0.4);
+}
+.panel-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.panel-badge {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 1px 8px;
+  font-size: 0.68rem;
+  color: var(--text-2);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── LEFT PANEL: Stats & Alert Feed ──────────────────────────── */
+#left-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+/* Stats Cards */
+.stats-summary {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.stat-box {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.stat-box:hover { border-color: var(--border-lit); transform: translateY(-1px); }
+.stat-box.active { border-color: var(--accent-cyan); background: rgba(0,212,255,0.06); }
+.stat-box .count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.stat-box .label {
+  font-size: 0.58rem;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.stat-box.crit .count { color: var(--critical); }
+.stat-box.mod .count  { color: var(--moderate); }
+.stat-box.low .count  { color: var(--low); }
+.stat-box.tot .count  { color: var(--accent-cyan); }
+
+/* Severity Progress Bar */
+.sev-bar-wrap {
+  margin-top: 10px;
+}
+.sev-bar-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg-deep);
+  overflow: hidden;
+  display: flex;
+  gap: 2px;
+}
+.sev-seg { height: 100%; transition: flex 0.4s ease; }
+.sev-seg.crit { background: var(--critical); }
+.sev-seg.mod  { background: var(--moderate); }
+.sev-seg.low  { background: var(--low); }
+
+/* Alert Feed Filter Chips */
+.feed-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-deep);
+}
+.chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 2px 9px;
+  font-size: 0.65rem;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.chip:hover, .chip.active {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+/* Alert List */
+#feed-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.empty-feed {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.alert-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  animation: cardIn 0.25s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alert-card:hover {
+  border-color: var(--accent-cyan);
+  background: var(--bg-card-hover);
+  transform: translateX(2px);
+}
+.alert-card.selected {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.08);
+  box-shadow: 0 0 12px rgba(0,212,255,0.2);
+}
+@keyframes cardIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+.alert-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.alert-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.alert-pill-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.alert-pill-dot.critical  { background: var(--critical); box-shadow: 0 0 8px var(--critical); }
+.alert-pill-dot.moderate  { background: var(--moderate); box-shadow: 0 0 6px var(--moderate); }
+.alert-pill-dot.low       { background: var(--low); }
+.alert-pill-dot.negligible{ background: var(--negligible); }
+
+.alert-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.alert-score {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+.alert-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: var(--text-3);
+  font-family: 'JetBrains Mono', monospace;
+}
+.alert-meta-grid span { color: var(--text-2); }
+
+/* ── CENTER PANEL: Sonar Waterfall & Canvas ──────────────────── */
+#center-panel {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+#sonar-canvas-wrap {
+  flex: 1;
+  position: relative;
+  background: #020509;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#sonar-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  transform-origin: center center;
+}
+#detection-svg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+.sonar-waterfall-nadir {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%; width: 2px;
+  background: rgba(0, 212, 255, 0.25);
+  border-left: 1px dashed rgba(0, 212, 255, 0.4);
+  pointer-events: none;
+  display: none;
+}
+.sonar-waterfall-nadir.visible { display: block; }
+
+/* Drag & Drop Overlay for Direct Analysis */
+#drop-zone-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 12, 24, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  z-index: 10;
+  text-align: center;
+}
+.drop-icon {
+  font-size: 3rem;
+  filter: drop-shadow(0 0 16px rgba(0,212,255,0.4));
+  animation: floatIcon 3s ease-in-out infinite;
+}
+@keyframes floatIcon { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.drop-title { font-size: 1.15rem; font-weight: 700; color: #fff; }
+.drop-sub { font-size: 0.78rem; color: var(--text-2); max-width: 440px; line-height: 1.4; }
+
+.sample-pick-wrap {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.sample-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.sample-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sample-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(0,212,255,0.08);
+}
+
+/* Sonar Bottom Control Bar */
+.sonar-ctrl-bar {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  gap: 10px;
+  font-size: 0.72rem;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.tgl-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tgl-btn.active {
+  background: rgba(0, 212, 255, 0.12);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+.sonar-telemetry-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.sonar-telemetry-item span.k { color: var(--text-3); }
+.sonar-telemetry-item span.v { font-family: 'JetBrains Mono', monospace; color: var(--text-1); }
+
+/* ── RIGHT PANEL: GIS Map & Geotag Inspector ─────────────────── */
+#right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+/* Leaflet Map */
+#map-panel {
+  flex: 0 0 250px;
+  display: flex;
+  flex-direction: column;
+}
+#map {
+  flex: 1;
+  background: #060e1a;
+  min-height: 180px;
+}
+.map-ctrl-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  font-size: 0.68rem;
+}
+.map-mode-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 0.65rem;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.map-mode-btn.active {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* Anomaly Geotag & Physics Inspector */
+#inspector-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#inspector-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.inspector-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 0.76rem;
+}
+
+.inspect-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.inspect-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-1);
+}
+.inspect-sev {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.inspect-sev.critical { background: var(--critical-dim); color: var(--critical); border: 1px solid var(--critical); }
+.inspect-sev.moderate { background: var(--moderate-dim); color: var(--moderate); border: 1px solid var(--moderate); }
+.inspect-sev.low      { background: var(--low-dim); color: var(--low); border: 1px solid var(--low); }
+
+.inspect-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inspect-section-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.inspect-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.inspect-cell {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+.inspect-cell .k { font-size: 0.6rem; color: var(--text-3); text-transform: uppercase; }
+.inspect-cell .v { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 600; color: var(--text-1); margin-top: 2px; }
+
+/* Physics Cue Meters */
+.physics-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bar-lbl {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: var(--text-2);
+}
+.bar-lbl span.score { font-family: 'JetBrains Mono', monospace; color: var(--accent-cyan); font-weight: 600; }
+.bar-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-teal), var(--accent-cyan));
+  transition: width 0.4s ease;
+}
+
+/* Toast Container */
+#toast-container {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg-card);
+  border: 1px solid var(--border-lit);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.78rem;
+  color: var(--text-1);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+  animation: toastIn 0.25s ease-out;
+}
+.toast.success { border-color: var(--low); }
+.toast.alert   { border-color: var(--critical); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+
+/* Hidden file input */
+#file-input { display: none; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ── Top Header ─────────────────────────────────────────────── -->
+  <header>
+    <div class="logo-wrap">
+      <div class="logo-badge">🌊</div>
+      <div>
+        <div class="logo-title">SENOR<span>ITA</span> <span style="font-size:0.68rem;background:rgba(0,212,255,0.15);padding:1px 6px;border-radius:4px;color:var(--accent-cyan);font-weight:600">AI</span></div>
+        <div class="logo-sub">Side-Scan Sonar & Hydrographic Geotagging System</div>
+      </div>
+    </div>
+
+    <div class="v-sep"></div>
+
+    <!-- Mode Selector -->
+    <div class="mode-tabs">
+      <button class="mode-tab" id="tab-live" onclick="setDashboardMode('live')">
+        <span>📡</span> Live Stream
+      </button>
+      <button class="mode-tab active" id="tab-analysis" onclick="setDashboardMode('analysis')">
+        <span>🚀</span> Direct Analysis
+      </button>
+    </div>
+
+    <div class="v-sep"></div>
+
+    <!-- Status & Telemetry Indicators -->
+    <div class="status-pill">
+      <div class="pulse-dot live" id="sys-pulse"></div>
+      <span id="sys-status">SYSTEM READY</span>
+    </div>
+
+    <div class="telemetry-strip">
+      <div class="stat-pill">
+        <div class="val" id="top-anomalies">0</div>
+        <div class="lbl">Anomalies</div>
+      </div>
+      <div class="stat-pill">
+        <div class="val" id="top-pings">0</div>
+        <div class="lbl">Pings / Frames</div>
+      </div>
+      <div class="stat-pill">
+        <div class="val" id="top-fps">—</div>
+        <div class="lbl">Inference Latency</div>
+      </div>
+    </div>
+
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <!-- Dataset Selector -->
+      <div class="dataset-pill" style="display:flex;align-items:center;gap:6px;background:rgba(15,23,42,0.85);border:1px solid #1e3a5f;border-radius:6px;padding:3px 8px;margin-right:2px">
+        <span style="font-size:0.75rem;font-weight:700;color:#94a3b8;text-transform:uppercase">Dataset:</span>
+        <select class="cfg-select" id="top-dataset-select" onchange="applyLocationPreset(this.value)" style="background:transparent;border:none;color:#38bdf8;font-weight:700;font-size:0.82rem;cursor:pointer;outline:none;padding:2px 0">
+          <option value="bangalore">Test Basin (12.97° N, 77.59° E)</option>
+          <option value="bay_bengal">Bay of Bengal Trench (13.08° N, 80.27° E)</option>
+          <option value="arabian_sea">Arabian Sea Offshore (18.92° N, 72.83° E)</option>
+          <option value="indian_ocean">Deep Indian Ocean (6.50° N, 78.50° E)</option>
+        </select>
+      </div>
+
+      <button class="btn-ui" id="btn-survey-cfg" onclick="toggleSurveyDrawer()">
+        <span>⚙</span> Geotag Config
+      </button>
+      <button class="btn-ui primary" id="btn-demo-sample" onclick="runDemoSample()">
+        <span>⚡</span> Run Demo Sample
+      </button>
+      <button class="btn-ui" id="btn-upload-file" onclick="triggerFileUpload()">
+        <span>📤</span> Upload Sonar
+      </button>
+
+      <!-- Export Suite -->
+      <button class="btn-ui" id="btn-export-csv" onclick="exportData('csv')" title="Export GIS-Ready CSV">
+        <span>CSV</span>
+      </button>
+      <button class="btn-ui" id="btn-export-geojson" onclick="exportData('geojson')" title="Export GeoJSON for QGIS/ArcGIS">
+        <span>GeoJSON</span>
+      </button>
+      <button class="btn-ui" id="btn-export-json" onclick="exportData('json')" title="Download Full JSON Report">
+        <span>JSON</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Secondary Geotagging & Survey Telemetry Bar ────────────── -->
+  <div id="geotag-subbar">
+    <div class="geo-badge">
+      <span class="k">Freq</span>
+      <span class="v" id="geo-freq-val">600 kHz</span>
+    </div>
+    <div class="geo-badge">
+      <span class="k">Swath Width</span>
+      <span class="v" id="geo-swath-val">100m (±50m)</span>
+    </div>
+    <div class="geo-badge">
+      <span class="k">Towfish Alt (H)</span>
+      <span class="v" id="geo-alt-val">10.0m</span>
+    </div>
+    <div class="geo-badge">
+      <span class="k">Layback (L)</span>
+      <span class="v" id="geo-layback-val">15.0m</span>
+    </div>
+    <div class="geo-badge">
+      <span class="k">Origin Lat/Lon</span>
+      <span class="v" id="geo-origin-val">12.97160° N, 77.59460° E</span>
+    </div>
+    <div class="geo-badge">
+      <span class="k">Heading</span>
+      <span class="v" id="geo-heading-val">045.0°</span>
+    </div>
+
+    <!-- Physics status indicators -->
+    <div class="geo-tag-physics">
+      <div class="physics-pill ok" title="Slant-to-ground unwarping: Rg = sqrt(max(0, Rs² - H²))">
+        T4-C Slant Rg
+      </div>
+      <div class="physics-pill ok" title="Towfish layback offset backward along vessel heading">
+        T4-D Layback
+      </div>
+      <div class="physics-pill ok" title="Power-law multi-signal evidential confidence scoring">
+        Evidential S = 100×R^0.48
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Collapsible Survey Parameters Drawer ────────────────────── -->
+  <div id="survey-drawer">
+    <div class="cfg-group">
+      <label class="cfg-lbl">Acoustic Frequency</label>
+      <select class="cfg-select" id="cfg-freq" onchange="handleFrequencyChange(this.value)">
+        <option value="600kHz" selected>600 kHz — 50m Swath (HD Inspection)</option>
+        <option value="900kHz">900 kHz — 30m Swath (Ultra High-Res Debris)</option>
+        <option value="300kHz">300 kHz — 100m Swath (Balanced Search)</option>
+        <option value="100kHz">100 kHz — 150m Swath (Wide Area Recon)</option>
+      </select>
+    </div>
+
+    <div class="cfg-group">
+      <label class="cfg-lbl">Survey Geographic Preset</label>
+      <select class="cfg-select" id="cfg-preset" onchange="applyLocationPreset(this.value)">
+        <option value="bangalore" selected>Demo Testing Basin (12.9716° N, 77.5946° E)</option>
+        <option value="bay_bengal">Bay of Bengal Trench (13.0827° N, 80.2707° E)</option>
+        <option value="arabian_sea">Arabian Sea Offshore (18.9220° N, 72.8347° E)</option>
+        <option value="indian_ocean">Deep Indian Ocean (6.5000° N, 78.5000° E)</option>
+      </select>
+    </div>
+
+    <div class="cfg-group">
+      <label class="cfg-lbl">Origin Latitude</label>
+      <input type="number" step="0.0001" class="cfg-input" id="cfg-lat" value="12.9716">
+    </div>
+
+    <div class="cfg-group">
+      <label class="cfg-lbl">Origin Longitude</label>
+      <input type="number" step="0.0001" class="cfg-input" id="cfg-lon" value="77.5946">
+    </div>
+
+    <div class="cfg-group">
+      <label class="cfg-lbl">Vessel Heading (°)</label>
+      <input type="number" min="0" max="360" step="1" class="cfg-input" id="cfg-hdg" value="45.0">
+    </div>
+
+    <div class="cfg-group">
+      <label class="cfg-lbl">Towfish Altitude H (m)</label>
+      <input type="number" min="0" max="100" step="0.5" class="cfg-input" id="cfg-alt" value="10.0">
+    </div>
+
+    <div class="cfg-group">
+      <label class="cfg-lbl">Towfish Layback L (m)</label>
+      <input type="number" min="0" max="300" step="1" class="cfg-input" id="cfg-layback" value="15.0">
+    </div>
+
+    <div class="cfg-group">
+      <label class="cfg-lbl">CARTO API Key (Optional)</label>
+      <input type="text" class="cfg-input" id="cfg-carto-key" placeholder="Enter key (or leave empty for free Esri)" value="" style="width:200px">
+    </div>
+
+    <div>
+      <button class="btn-ui primary" onclick="saveSurveyParameters()">
+        <span>✓</span> Apply Settings
+      </button>
+    </div>
+  </div>
+
+  <!-- ── 3-Column Main Content ──────────────────────────────────── -->
+  <div id="main-view">
+
+    <!-- ── LEFT PANEL: Detection Statistics & Alert Feed ────────── -->
+    <div id="left-panel">
+      <!-- Summary Box -->
+      <div class="stats-summary">
+        <div class="stats-grid">
+          <div class="stat-box tot active" onclick="filterBySeverity('all')">
+            <div class="count" id="s-total">0</div>
+            <div class="label">Total</div>
+          </div>
+          <div class="stat-box crit" onclick="filterBySeverity('critical')">
+            <div class="count" id="s-critical">0</div>
+            <div class="label">Critical</div>
+          </div>
+          <div class="stat-box mod" onclick="filterBySeverity('moderate')">
+            <div class="count" id="s-moderate">0</div>
+            <div class="label">Moderate</div>
+          </div>
+          <div class="stat-box low" onclick="filterBySeverity('low')">
+            <div class="count" id="s-low">0</div>
+            <div class="label">Low</div>
+          </div>
+        </div>
+
+        <div class="sev-bar-wrap">
+          <div class="sev-bar-track">
+            <div class="sev-seg crit" id="bar-crit" style="flex:0"></div>
+            <div class="sev-seg mod"  id="bar-mod"  style="flex:0"></div>
+            <div class="sev-seg low"  id="bar-low"  style="flex:0"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert Feed Panel -->
+      <div class="panel" style="flex:1">
+        <div class="panel-header">
+          <span class="panel-title">🚨 Geotagged Alerts</span>
+          <span class="panel-badge" id="feed-badge">0 targets</span>
+        </div>
+
+        <div class="feed-filter-row">
+          <div class="chip active" onclick="filterBySeverity('all', this)">All</div>
+          <div class="chip" onclick="filterBySeverity('critical', this)">Critical</div>
+          <div class="chip" onclick="filterBySeverity('moderate', this)">Moderate</div>
+          <div class="chip" onclick="filterBySeverity('low', this)">Low</div>
+        </div>
+
+        <div id="feed-container">
+          <div class="empty-feed" id="empty-feed-msg">
+            <span style="font-size:1.5rem">📡</span>
+            <div>Awaiting sonar pings or file analysis...</div>
+            <button class="btn-ui primary" style="font-size:0.7rem;padding:4px 10px;margin-top:6px" onclick="runDemoSample()">Load Demo Sonar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CENTER PANEL: Sonar Display Waterfall ────────────────── -->
+    <div class="panel" id="center-panel">
+      <div class="panel-header">
+        <span class="panel-title">
+          <span>📡</span> Sonar Waterfall & Ground-Range Projection
+        </span>
+        <span class="panel-badge" id="canvas-badge">Ready</span>
+      </div>
+
+      <div id="sonar-canvas-wrap">
+        <canvas id="sonar-canvas"></canvas>
+        <svg id="detection-svg"></svg>
+        <div class="sonar-waterfall-nadir visible" id="nadir-line"></div>
+
+        <!-- Direct Upload & Demo Overlay -->
+        <div id="drop-zone-overlay">
+          <div class="drop-icon">🌊</div>
+          <div class="drop-title">Side-Scan Sonar Analysis Ready</div>
+          <div class="drop-sub">
+            Drag & drop raw SSS imagery (TIFF, PNG, JPG), select a sample below, or toggle <b>Live Stream</b> mode.
+          </div>
+
+          <div class="sample-pick-wrap">
+            <div style="font-size:0.7rem;color:var(--text-3);text-transform:uppercase;font-weight:600">Quick Test Samples:</div>
+            <div class="sample-btns" id="sample-buttons-container">
+              <button class="sample-btn" onclick="analyzeSampleImage('sonar_test_01.png')">Sample 1: Debris Field</button>
+              <button class="sample-btn" onclick="analyzeSampleImage('sonar_test_02.png')">Sample 2: Pipe & Barrel</button>
+              <button class="sample-btn" onclick="analyzeSampleImage('sonar_test_03.png')">Sample 3: Wreck Target</button>
+              <button class="sample-btn" onclick="analyzeSampleImage('sonar_test_04.png')">Sample 4: Cable Linear</button>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;display:flex;gap:10px">
+            <button class="btn-ui primary" onclick="triggerFileUpload()">
+              <span>📂 Browse Sonar File</span>
+            </button>
+            <button class="btn-ui" onclick="setDashboardMode('live')">
+              <span>📡 Switch to Live Stream</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Canvas Controls -->
+      <div class="sonar-ctrl-bar">
+        <button class="tgl-btn active" id="tgl-boxes" onclick="toggleOverlayOption('boxes')">Boxes</button>
+        <button class="tgl-btn active" id="tgl-dim" onclick="toggleOverlayOption('dimensions')">Dimensions (m)</button>
+        <button class="tgl-btn active" id="tgl-lbl" onclick="toggleOverlayOption('labels')">Labels</button>
+        <button class="tgl-btn active" id="tgl-nadir" onclick="toggleOverlayOption('nadir')">Nadir Line</button>
+
+        <div class="v-sep" style="height:18px"></div>
+
+        <div class="sonar-telemetry-item">
+          <span class="k">Swath Range:</span>
+          <span class="v" id="bar-swath-val">50 m</span>
+        </div>
+
+        <div class="sonar-telemetry-item" style="margin-left:auto">
+          <span class="k">Speed:</span>
+          <span class="v" id="bar-fps-val">0.0 fps</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── RIGHT PANEL: GIS Map & Geotag Inspector ──────────────── -->
+    <div id="right-panel">
+
+      <!-- Leaflet Map Panel -->
+      <div class="panel" id="map-panel">
+        <div class="panel-header">
+          <span class="panel-title">🗺 Survey GIS Track</span>
+          <div style="display:flex;gap:4px">
+            <button class="map-mode-btn active" id="btn-map-dark" onclick="setMapLayer('dark')">Dark (Free)</button>
+            <button class="map-mode-btn" id="btn-map-ocean" onclick="setMapLayer('ocean')">Ocean Bathymetry</button>
+            <button class="map-mode-btn" id="btn-map-sat" onclick="setMapLayer('satellite')">Satellite</button>
+          </div>
+        </div>
+
+        <div id="map"></div>
+
+        <div class="map-ctrl-bar">
+          <span style="color:var(--text-3)">Vessel Track: <b id="map-point-count" style="color:var(--accent-cyan)">0</b> pts</span>
+          <span style="color:var(--text-3)">Layback Towfish: <b id="map-fish-coords" style="color:var(--text-1)">—</b></span>
+        </div>
+      </div>
+
+      <!-- Anomaly Geotag & Physics Inspector Panel -->
+      <div class="panel" id="inspector-panel">
+        <div class="panel-header">
+          <span class="panel-title">🔬 Geotag & Physics Inspector</span>
+          <span class="panel-badge" id="inspect-badge">No Selection</span>
+        </div>
+
+        <div id="inspector-body">
+          <div class="inspector-empty" id="inspect-empty">
+            Select any target from the alert feed, sonar canvas, or GIS map to inspect its real-world coordinates and multi-signal physics verification.
+          </div>
+
+          <div id="inspect-content" style="display:none;flex-direction:column;gap:12px">
+            <!-- Header -->
+            <div class="inspect-header">
+              <div>
+                <div class="inspect-id" id="ins-id">ANM-001</div>
+                <div style="font-size:0.8rem;color:var(--accent-cyan);font-weight:600" id="ins-class">Ghost Net</div>
+              </div>
+              <div class="inspect-sev critical" id="ins-sev">Critical</div>
+            </div>
+
+            <!-- Geographic Position -->
+            <div class="inspect-section">
+              <div class="inspect-section-title">📍 WGS84 Geolocation (T4-D Corrected)</div>
+              <div class="inspect-grid">
+                <div class="inspect-cell">
+                  <div class="k">Latitude</div>
+                  <div class="v" id="ins-lat">—</div>
+                </div>
+                <div class="inspect-cell">
+                  <div class="k">Longitude</div>
+                  <div class="v" id="ins-lon">—</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;margin-top:2px">
+                <button class="btn-ui" style="font-size:0.68rem;padding:4px 8px;flex:1" onclick="copyInspectorGPS()">
+                  📋 Copy GPS
+                </button>
+                <button class="btn-ui" style="font-size:0.68rem;padding:4px 8px;flex:1" onclick="openGoogleMaps()">
+                  🌐 View on Maps
+                </button>
+              </div>
+            </div>
+
+            <!-- Physical Seabed Footprint -->
+            <div class="inspect-section">
+              <div class="inspect-section-title">📐 Seabed Dimensions (T4-C Unwarped)</div>
+              <div class="inspect-grid">
+                <div class="inspect-cell">
+                  <div class="k">Length (Along-Track)</div>
+                  <div class="v" id="ins-len">—</div>
+                </div>
+                <div class="inspect-cell">
+                  <div class="k">Width (Ground Range)</div>
+                  <div class="v" id="ins-wid">—</div>
+                </div>
+                <div class="inspect-cell">
+                  <div class="k">Cross-Track Ground Rg</div>
+                  <div class="v" id="ins-rg">—</div>
+                </div>
+                <div class="inspect-cell">
+                  <div class="k">Raw Slant Range (Rs)</div>
+                  <div class="v" id="ins-rs">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Multi-Signal Physics Evidence -->
+            <div class="inspect-section">
+              <div class="inspect-section-title">⚡ Multi-Signal Evidential Fusion</div>
+              <div class="physics-bars">
+                <div class="bar-row">
+                  <div class="bar-lbl">
+                    <span>YOLOv8 Neural Detection (C_yolo)</span>
+                    <span class="score" id="bar-val-yolo">0%</span>
+                  </div>
+                  <div class="bar-track"><div class="bar-fill" id="bar-fill-yolo" style="width:0%"></div></div>
+                </div>
+
+                <div class="bar-row">
+                  <div class="bar-lbl">
+                    <span>Acoustic Shadow Relief (S_shadow)</span>
+                    <span class="score" id="bar-val-shadow">0%</span>
+                  </div>
+                  <div class="bar-track"><div class="bar-fill" id="bar-fill-shadow" style="width:0%"></div></div>
+                </div>
+
+                <div class="bar-row">
+                  <div class="bar-lbl">
+                    <span>Morphology Contour (S_contour)</span>
+                    <span class="score" id="bar-val-morph">0%</span>
+                  </div>
+                  <div class="bar-track"><div class="bar-fill" id="bar-fill-morph" style="width:0%"></div></div>
+                </div>
+
+                <div class="bar-row">
+                  <div class="bar-lbl">
+                    <span>Texture Entropy Seafloor (S_texture)</span>
+                    <span class="score" id="bar-val-tex">0%</span>
+                  </div>
+                  <div class="bar-track"><div class="bar-fill" id="bar-fill-tex" style="width:0%"></div></div>
+                </div>
+              </div>
+
+              <div style="background:var(--bg-card);border:1px solid var(--border-lit);border-radius:var(--radius-sm);padding:8px 10px;margin-top:6px;display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <div style="font-size:0.62rem;color:var(--text-3);text-transform:uppercase">Calibrated Evidential Score</div>
+                  <div style="font-size:0.65rem;color:var(--text-2)">Power-law calibration S = 100 × R^0.48</div>
+                </div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;color:var(--accent-cyan)" id="ins-calibrated-score">0%</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- Hidden file picker -->
+<input type="file" id="file-input" accept=".tif,.tiff,.png,.jpg,.jpeg,.bmp" onchange="handleFileSelected(this.files[0])">
+
+<script>
+// ── Global State ───────────────────────────────────────────────
+const STATE = {
+  mode: 'analysis', // 'analysis' | 'live'
+  ws: null,
+  activeJobId: null,
+  sessionId: null,
+  sessionStart: null,
+  lastFrameTime: 0,
+  fps: 0,
+
+  // Geotagging & Survey Parameters
+  survey: {
+    frequency: '600kHz',
+    rangeM: 50.0,
+    originLat: 12.9716,
+    originLon: 77.5946,
+    headingDeg: 45.0,
+    towfishAltitudeM: 10.0,
+    laybackM: 15.0,
+  },
+
+  // Telemetry & Detections
+  totalDetections: 0,
+  totalPings: 0,
+  totalFrames: 0,
+  counts: { critical: 0, moderate: 0, low: 0 },
+  activeFilter: 'all',
+  detections: [],
+  selectedDetection: null,
+
+  // Display toggles
+  overlay: {
+    boxes: true,
+    dimensions: true,
+    labels: true,
+    nadir: true,
+  },
+
+  // Map & GIS
+  map: null,
+  trackPolyline: null,
+  fishMarker: null,
+  markersLayer: null,
+  darkTileLayer: null,
+  oceanTileLayer: null,
+  satTileLayer: null,
+  cartoTileLayer: null,
+  cartoApiKey: localStorage.getItem('carto_api_key') || '',
+  currentTileType: 'dark',
+};
+
+const FREQ_SWATH_MAP = {
+  '100kHz': 150.0,
+  '300kHz': 100.0,
+  '600kHz': 50.0,
+  '900kHz': 30.0,
+};
+
+const CLASS_PALETTE = {
+  ghost_net:      { label: "Ghost Net",       color: "#ff4757" },
+  shipwreck:      { label: "Shipwreck",        color: "#ffa502" },
+  pipe:           { label: "Pipe / Conduit",   color: "#1e90ff" },
+  cylinder:       { label: "Barrel/Cylinder",  color: "#2ed573" },
+  debris_cluster: { label: "Debris Cluster",   color: "#ff6348" },
+  cable:          { label: "Cable / Rope",     color: "#a855f7" },
+  anomaly:        { label: "Unknown Anomaly",  color: "#eccc68" },
+};
+
+// ── Leaflet GIS Map Initialization ─────────────────────────────
+function initMap() {
+  STATE.map = L.map('map', {
+    zoomControl: false,
+    attributionControl: false,
+  }).setView([STATE.survey.originLat, STATE.survey.originLon], 14);
+
+  // 100% Free, Zero API Key Required, Zero Watermark Providers:
+  // Esri Dark Gray Canvas: High performance, dark theme, zero watermark
+  STATE.darkTileLayer = L.layerGroup([
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }),
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, opacity: 0.9 })
+  ]);
+
+  // Esri Ocean Base: Dedicated bathymetric marine depth contours
+  STATE.oceanTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 13 });
+
+  // Esri World Imagery (Satellite)
+  STATE.satTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 });
+
+  // Add default dark layer (or CARTO if key provided)
+  if (STATE.cartoApiKey) {
+    STATE.cartoTileLayer = L.tileLayer(`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${STATE.cartoApiKey}`, { maxZoom: 19 });
+    STATE.cartoTileLayer.addTo(STATE.map);
+  } else {
+    STATE.darkTileLayer.addTo(STATE.map);
+  }
+
+  STATE.trackPolyline = L.polyline([], {
+    color: '#00d4ff',
+    weight: 3,
+    opacity: 0.8,
+    dashArray: '4, 6',
+  }).addTo(STATE.map);
+
+  STATE.markersLayer = L.layerGroup().addTo(STATE.map);
+
+  const fishIcon = L.divIcon({
+    className: 'fish-icon',
+    html: '<div style="width:12px;height:12px;background:#00d4ff;border:2px solid #fff;border-radius:50%;box-shadow:0 0 10px #00d4ff"></div>',
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+  STATE.fishMarker = L.marker([STATE.survey.originLat, STATE.survey.originLon], { icon: fishIcon }).addTo(STATE.map);
+}
+
+function setMapLayer(type) {
+  if (STATE.darkTileLayer && STATE.map.hasLayer(STATE.darkTileLayer)) STATE.map.removeLayer(STATE.darkTileLayer);
+  if (STATE.oceanTileLayer && STATE.map.hasLayer(STATE.oceanTileLayer)) STATE.map.removeLayer(STATE.oceanTileLayer);
+  if (STATE.satTileLayer && STATE.map.hasLayer(STATE.satTileLayer)) STATE.map.removeLayer(STATE.satTileLayer);
+  if (STATE.cartoTileLayer && STATE.map.hasLayer(STATE.cartoTileLayer)) STATE.map.removeLayer(STATE.cartoTileLayer);
+
+  document.querySelectorAll('.map-mode-btn').forEach(b => b.classList.remove('active'));
+
+  if (type === 'satellite') {
+    STATE.satTileLayer.addTo(STATE.map);
+    const btn = document.getElementById('btn-map-sat');
+    if (btn) btn.classList.add('active');
+  } else if (type === 'ocean') {
+    STATE.oceanTileLayer.addTo(STATE.map);
+    const btn = document.getElementById('btn-map-ocean');
+    if (btn) btn.classList.add('active');
+  } else {
+    if (STATE.cartoApiKey) {
+      if (!STATE.cartoTileLayer) {
+        STATE.cartoTileLayer = L.tileLayer(`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${STATE.cartoApiKey}`, { maxZoom: 19 });
+      }
+      STATE.cartoTileLayer.addTo(STATE.map);
+    } else {
+      STATE.darkTileLayer.addTo(STATE.map);
+    }
+    const btn = document.getElementById('btn-map-dark');
+    if (btn) btn.classList.add('active');
+  }
+  STATE.currentTileType = type;
+}
+
+// ── Canvas Display Logic ───────────────────────────────────────
+const canvas  = document.getElementById('sonar-canvas');
+const ctx     = canvas.getContext('2d');
+const svgElem = document.getElementById('detection-svg');
+let currentLoadedImage = null;
+
+function resizeCanvas() {
+  const wrap = document.getElementById('sonar-canvas-wrap');
+  if (wrap) {
+    canvas.width  = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+    if (currentLoadedImage) {
+      renderSonarImage(currentLoadedImage, STATE.detections);
+    }
+  }
+}
+window.addEventListener('resize', resizeCanvas);
+
+function renderSonarImage(imgOrSrc, detections = []) {
+  const wrap = document.getElementById('sonar-canvas-wrap');
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+
+  if (typeof imgOrSrc === 'string') {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      currentLoadedImage = img;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      drawSvgDetections(detections);
+    };
+    img.src = imgOrSrc;
+  } else if (imgOrSrc instanceof HTMLImageElement) {
+    currentLoadedImage = imgOrSrc;
+    ctx.drawImage(imgOrSrc, 0, 0, canvas.width, canvas.height);
+    drawSvgDetections(detections);
+  }
+}
+
+// ── Client-Side Deduplication & NMS ──────────────────────────────
+function deduplicateDetections(dets) {
+  if (!dets || dets.length <= 1) return dets || [];
+  const sorted = [...dets].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+  const kept = [];
+  for (const det of sorted) {
+    const bbox = det.bbox || det.bbox_px;
+    if (!bbox) continue;
+    const x1 = bbox.x1 ?? bbox[0] ?? 0;
+    const y1 = bbox.y1 ?? bbox[1] ?? 0;
+    const x2 = bbox.x2 ?? bbox[2] ?? 0;
+    const y2 = bbox.y2 ?? bbox[3] ?? 0;
+    const area = Math.max(1, (x2 - x1) * (y2 - y1));
+
+    let suppress = false;
+    for (const k of kept) {
+      const kbox = k.bbox || k.bbox_px;
+      const kx1 = kbox.x1 ?? kbox[0] ?? 0;
+      const ky1 = kbox.y1 ?? kbox[1] ?? 0;
+      const kx2 = kbox.x2 ?? kbox[2] ?? 0;
+      const ky2 = kbox.y2 ?? kbox[3] ?? 0;
+      const karea = Math.max(1, (kx2 - kx1) * (ky2 - ky1));
+
+      const ix1 = Math.max(x1, kx1);
+      const iy1 = Math.max(y1, ky1);
+      const ix2 = Math.min(x2, kx2);
+      const iy2 = Math.min(y2, ky2);
+      if (ix2 > ix1 && iy2 > iy1) {
+        const inter = (ix2 - ix1) * (iy2 - iy1);
+        const iou = inter / (area + karea - inter);
+        const iom = inter / Math.min(area, karea);
+        if (iou > 0.35 || iom > 0.55) {
+          suppress = true;
+          break;
+        }
+      }
+    }
+    if (!suppress) kept.push(det);
+  }
+  return kept;
+}
+
+function drawSvgDetections(detections) {
+  const w = canvas.width, h = canvas.height;
+  svgElem.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svgElem.innerHTML = '';
+
+  if (!STATE.overlay.boxes) return;
+
+  const cleanDets = deduplicateDetections(detections);
+  const placedLabels = [];
+  const placedDims = [];
+
+  const naturalW = (currentLoadedImage && (currentLoadedImage.naturalWidth || currentLoadedImage.width)) || 0;
+  const naturalH = (currentLoadedImage && (currentLoadedImage.naturalHeight || currentLoadedImage.height)) || 0;
+
+  cleanDets.forEach(det => {
+    if (STATE.activeFilter !== 'all' && det.severity !== STATE.activeFilter) return;
+
+    const bbox = det.bbox || det.bbox_px;
+    if (!bbox) return;
+
+    const imgW = det.image_width || naturalW || w;
+    const imgH = det.image_height || naturalH || h;
+    const scaleX = w / imgW;
+    const scaleY = h / imgH;
+
+    const x1 = (bbox.x1 ?? bbox[0] ?? 0) * scaleX;
+    const y1 = (bbox.y1 ?? bbox[1] ?? 0) * scaleY;
+    const x2 = (bbox.x2 ?? bbox[2] ?? 0) * scaleX;
+    const y2 = (bbox.y2 ?? bbox[3] ?? 0) * scaleY;
+    const bw = Math.max(x2 - x1, 4);
+    const bh = Math.max(y2 - y1, 4);
+
+    const isSelected = STATE.selectedDetection && (STATE.selectedDetection.id === det.id || STATE.selectedDetection.detection_id === det.id);
+    const info = CLASS_PALETTE[det.class_name] || { color: '#00d4ff' };
+
+    // 1. Vector Bounding Box
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', x1);
+    rect.setAttribute('y', y1);
+    rect.setAttribute('width', bw);
+    rect.setAttribute('height', bh);
+    rect.setAttribute('stroke', isSelected ? '#ffffff' : info.color);
+    rect.setAttribute('stroke-width', isSelected ? '3' : '2');
+    rect.setAttribute('fill', isSelected ? 'rgba(0, 212, 255, 0.20)' : 'rgba(0,0,0,0)');
+    rect.setAttribute('rx', '3');
+    rect.style.cursor = 'pointer';
+    rect.onclick = () => selectDetection(det);
+    svgElem.appendChild(rect);
+
+    // 2. Crisp Vector Label with Collision Resolution & Boundary Clamping
+    if (STATE.overlay.labels) {
+      const labelText = `${det.class_label || det.class_name} ${(det.confidence||0).toFixed(0)}%`;
+      const pillW = Math.max(bw, Math.ceil(labelText.length * 6.5 + 24));
+      const pillH = 19;
+
+      let pillX = x1;
+      if (pillX + pillW > w - 4) pillX = Math.max(4, w - pillW - 4);
+      if (pillX < 4) pillX = 4;
+
+      let pillY = (y1 >= pillH + 4) ? (y1 - pillH - 2) : (y1 + 3);
+
+      // Collision avoidance with previously placed labels
+      let shiftCount = 0;
+      while (shiftCount < 4) {
+        let collides = false;
+        for (const p of placedLabels) {
+          if (Math.abs(pillX - p.x) < Math.min(pillW, p.w) && Math.abs(pillY - p.y) < pillH) {
+            collides = true;
+            break;
+          }
+        }
+        if (!collides) break;
+        pillY = (shiftCount % 2 === 0) ? (pillY - pillH - 2) : (y1 + bh + 4 + shiftCount * 8);
+        shiftCount++;
+      }
+      if (pillY < 2) pillY = y1 + 3;
+      placedLabels.push({ x: pillX, y: pillY, w: pillW, h: pillH });
+
+      const gLabel = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      gLabel.style.cursor = 'pointer';
+      gLabel.onclick = () => selectDetection(det);
+
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', pillX);
+      bg.setAttribute('y', pillY);
+      bg.setAttribute('width', pillW);
+      bg.setAttribute('height', pillH);
+      bg.setAttribute('fill', isSelected ? '#00d4ff' : 'rgba(7, 16, 30, 0.92)');
+      bg.setAttribute('stroke', isSelected ? '#ffffff' : info.color);
+      bg.setAttribute('stroke-width', '1.2');
+      bg.setAttribute('rx', '3');
+      gLabel.appendChild(bg);
+
+      // Colored indicator dot
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', pillX + 8);
+      dot.setAttribute('cy', pillY + pillH / 2);
+      dot.setAttribute('r', '3');
+      dot.setAttribute('fill', isSelected ? '#050c18' : info.color);
+      gLabel.appendChild(dot);
+
+      const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.setAttribute('x', pillX + 16);
+      txt.setAttribute('y', pillY + 13.5);
+      txt.setAttribute('fill', isSelected ? '#050c18' : '#f1f7ff');
+      txt.setAttribute('font-size', '10');
+      txt.setAttribute('font-weight', '700');
+      txt.setAttribute('font-family', 'Outfit, system-ui, sans-serif');
+      txt.textContent = labelText;
+      gLabel.appendChild(txt);
+
+      svgElem.appendChild(gLabel);
+    }
+
+    // 3. Crisp Real-World Dimension Tag with Protective Dark Pill
+    if (STATE.overlay.dimensions && det.estimated_size_m) {
+      const { length_m, width_m } = det.estimated_size_m;
+      if (length_m || width_m) {
+        const dimStr = `${length_m || 0}m × ${width_m || 0}m`;
+        const dimW = Math.ceil(dimStr.length * 6.5 + 14);
+        const dimH = 16;
+
+        let dimX = x1;
+        if (dimX + dimW > w - 4) dimX = Math.max(4, w - dimW - 4);
+        if (dimX < 4) dimX = 4;
+
+        let dimY = y1 + bh + 4;
+        if (dimY + dimH > h - 4) dimY = Math.max(4, y1 + bh - dimH - 4);
+
+        // Collision avoidance with previously placed dimension tags
+        for (const d of placedDims) {
+          if (Math.abs(dimX - d.x) < Math.min(dimW, d.w) && Math.abs(dimY - d.y) < dimH) {
+            dimY = d.y + dimH + 2;
+          }
+        }
+        placedDims.push({ x: dimX, y: dimY, w: dimW, h: dimH });
+
+        const gDim = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        const dimBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        dimBg.setAttribute('x', dimX);
+        dimBg.setAttribute('y', dimY);
+        dimBg.setAttribute('width', dimW);
+        dimBg.setAttribute('height', dimH);
+        dimBg.setAttribute('fill', 'rgba(5, 12, 24, 0.90)');
+        dimBg.setAttribute('stroke', '#00d4ff');
+        dimBg.setAttribute('stroke-width', '0.8');
+        dimBg.setAttribute('rx', '3');
+        gDim.appendChild(dimBg);
+
+        const dimTag = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dimTag.setAttribute('x', dimX + 7);
+        dimTag.setAttribute('y', dimY + 11.5);
+        dimTag.setAttribute('fill', '#00d4ff');
+        dimTag.setAttribute('font-size', '9.5');
+        dimTag.setAttribute('font-family', 'JetBrains Mono, monospace');
+        dimTag.setAttribute('font-weight', '600');
+        dimTag.textContent = dimStr;
+        gDim.appendChild(dimTag);
+
+        svgElem.appendChild(gDim);
+      }
+    }
+  });
+}
+
+// ── WebSocket Live Streaming ───────────────────────────────────
+function connectLiveWS() {
+  if (STATE.ws && (STATE.ws.readyState === WebSocket.OPEN || STATE.ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/live`);
+  STATE.ws = ws;
+
+  ws.onopen = () => {
+    updateSysStatus('LIVE STREAM ACTIVE', 'live');
+  };
+
+  ws.onmessage = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'connected') {
+        STATE.sessionId = msg.session_id;
+        showToast('Connected to Real-time Sonar Engine', 'success');
+      } else if (msg.type === 'frame_result') {
+        handleIncomingFrame(msg);
+      } else if (msg.type === 'heartbeat') {
+        if (msg.stats) updateTelemetryCounters(msg.stats);
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  ws.onclose = () => {
+    if (STATE.mode === 'live') {
+      updateSysStatus('STREAM OFFLINE — STANDBY', 'standby');
+      setTimeout(connectLiveWS, 4000);
+    }
+  };
+}
+
+function handleIncomingFrame(msg) {
+  document.getElementById('drop-zone-overlay').style.display = 'none';
+
+  const now = performance.now();
+  if (STATE.lastFrameTime) {
+    const dt = (now - STATE.lastFrameTime) / 1000;
+    STATE.fps = STATE.fps * 0.8 + (1 / dt) * 0.2;
+    document.getElementById('top-fps').textContent = `${(dt*1000).toFixed(0)}ms (${STATE.fps.toFixed(1)} FPS)`;
+    document.getElementById('bar-fps-val').textContent = `${STATE.fps.toFixed(1)} fps`;
+  }
+  STATE.lastFrameTime = now;
+
+  STATE.totalFrames = msg.frame_number || (STATE.totalFrames + 1);
+  document.getElementById('top-pings').textContent = STATE.totalFrames;
+  document.getElementById('canvas-badge').textContent = `Frame ${STATE.totalFrames}`;
+
+  if (msg.image_shape && msg.detections) {
+    const [imH, imW] = msg.image_shape;
+    msg.detections.forEach(det => {
+      det.image_width = det.image_width || imW;
+      det.image_height = det.image_height || imH;
+    });
+  }
+
+  if (msg.annotated_image_b64) {
+    const dataUrl = msg.annotated_image_b64.startsWith('data:') ? msg.annotated_image_b64 : `data:image/jpeg;base64,${msg.annotated_image_b64}`;
+    renderSonarImage(dataUrl, msg.detections || []);
+  }
+
+  if (msg.latest_gps) {
+    updateVesselTrack(msg.latest_gps.lat, msg.latest_gps.lon, msg.latest_gps.heading);
+  }
+
+  if (msg.detections && msg.detections.length > 0) {
+    msg.detections.forEach(det => addDetection(det));
+  }
+}
+
+// ── Direct Sonar Analysis Pipeline ─────────────────────────────
+async function runDirectAnalysis(formData, filename = "sonar_upload.png") {
+  updateSysStatus('ANALYZING SONAR IMAGE...', 'busy');
+  document.getElementById('canvas-badge').textContent = 'Processing...';
+
+  formData.set('frequency', STATE.survey.frequency);
+  formData.set('sonar_range_m', STATE.survey.rangeM);
+  formData.set('origin_lat', STATE.survey.originLat);
+  formData.set('origin_lon', STATE.survey.originLon);
+  formData.set('heading_deg', STATE.survey.headingDeg);
+  formData.set('towfish_altitude_m', STATE.survey.towfishAltitudeM);
+  formData.set('layback_m', STATE.survey.laybackM);
+
+  try {
+    const resp = await fetch('/api/analyze', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || 'Analysis pipeline failed');
+    }
+
+    const data = await resp.json();
+    STATE.activeJobId = data.job_id;
+
+    document.getElementById('drop-zone-overlay').style.display = 'none';
+    updateSysStatus('ANALYSIS COMPLETE', 'live');
+
+    document.getElementById('top-fps').textContent = `${data.processing_time_ms} ms`;
+    document.getElementById('canvas-badge').textContent = `Job ${data.job_id}`;
+    const cleanAnomalies = deduplicateDetections(data.anomalies || []);
+    if (data.image_width && data.image_height) {
+      cleanAnomalies.forEach(d => {
+        d.image_width = d.image_width || data.image_width;
+        d.image_height = d.image_height || data.image_height;
+      });
+    }
+    data.anomalies = cleanAnomalies;
+    data.total_anomalies = cleanAnomalies.length;
+
+    const displayUrl = (data.links && data.links.clean_image)
+      ? `${data.links.clean_image}?t=${Date.now()}`
+      : `/api/results/${data.job_id}/annotated?t=${Date.now()}`;
+    renderSonarImage(displayUrl, cleanAnomalies);
+
+    clearAllDetections();
+    cleanAnomalies.forEach(det => addDetection(det));
+
+    updateVesselTrack(STATE.survey.originLat, STATE.survey.originLon, STATE.survey.headingDeg);
+
+    if (data.anomalies && data.anomalies.length > 0) {
+      selectDetection(data.anomalies[0]);
+    }
+
+    showToast(`Analysis Complete: ${data.total_anomalies} anomalies identified`, 'success');
+
+  } catch(err) {
+    console.error(err);
+    updateSysStatus('ANALYSIS ERROR', 'standby');
+    showToast(`Error: ${err.message}`, 'alert');
+  }
+}
+
+async function analyzeSampleImage(filename) {
+  try {
+    STATE.currentSampleFile = filename;
+    updateSysStatus(`FETCHING ${filename}...`, 'busy');
+    const imgResp = await fetch(`/uploads/${filename}`);
+    if (!imgResp.ok) throw new Error('Sample image file not found');
+    const blob = await imgResp.blob();
+
+    const fd = new FormData();
+    fd.append('file', blob, filename);
+    await runDirectAnalysis(fd, filename);
+  } catch(err) {
+    showToast(`Failed to load ${filename}: ${err.message}`, 'alert');
+  }
+}
+
+function runDemoSample() {
+  analyzeSampleImage('sonar_test_01.png');
+}
+
+function triggerFileUpload() {
+  document.getElementById('file-input').click();
+}
+
+function handleFileSelected(file) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  runDirectAnalysis(fd, file.name);
+}
+
+// ── Detections Management & Geotagging ──────────────────────────
+function addDetection(det) {
+  const id = det.id || det.detection_id || `ANM-${STATE.detections.length + 1}`;
+  det.id = id;
+  det.detection_id = id;
+
+  STATE.detections.unshift(det);
+  STATE.totalDetections++;
+  document.getElementById('top-anomalies').textContent = STATE.totalDetections;
+
+  const sev = det.severity || 'low';
+  if (STATE.counts[sev] !== undefined) STATE.counts[sev]++;
+
+  updateStatsDisplay();
+  renderAlertCard(det);
+  addMapMarker(det);
+}
+
+function clearAllDetections() {
+  STATE.detections = [];
+  STATE.totalDetections = 0;
+  STATE.counts = { critical: 0, moderate: 0, low: 0 };
+  document.getElementById('feed-container').innerHTML = '';
+  STATE.markersLayer.clearLayers();
+  updateStatsDisplay();
+}
+
+function updateStatsDisplay() {
+  document.getElementById('s-total').textContent = STATE.totalDetections;
+  document.getElementById('s-critical').textContent = STATE.counts.critical;
+  document.getElementById('s-moderate').textContent = STATE.counts.moderate;
+  document.getElementById('s-low').textContent = STATE.counts.low;
+  document.getElementById('feed-badge').textContent = `${STATE.totalDetections} targets`;
+
+  const total = (STATE.counts.critical + STATE.counts.moderate + STATE.counts.low) || 1;
+  document.getElementById('bar-crit').style.flex = STATE.counts.critical / total;
+  document.getElementById('bar-mod').style.flex  = STATE.counts.moderate / total;
+  document.getElementById('bar-low').style.flex  = STATE.counts.low / total;
+}
+
+function renderAlertCard(det) {
+  const container = document.getElementById('feed-container');
+  const emptyMsg  = document.getElementById('empty-feed-msg');
+  if (emptyMsg) emptyMsg.style.display = 'none';
+
+  const info = CLASS_PALETTE[det.class_name] || { label: det.class_name, color: '#00d4ff' };
+  const lat = det.location?.latitude ? det.location.latitude.toFixed(5) : '—';
+  const lon = det.location?.longitude ? det.location.longitude.toFixed(5) : '—';
+  const len = det.estimated_size_m?.length_m ? `${det.estimated_size_m.length_m}m` : '—';
+  const wid = det.estimated_size_m?.width_m ? `${det.estimated_size_m.width_m}m` : '—';
+
+  const card = document.createElement('div');
+  card.className = `alert-card ${det.severity || 'low'}`;
+  card.id = `card-${det.id}`;
+  card.onclick = () => selectDetection(det);
+
+  card.innerHTML = `
+    <div class="alert-top">
+      <div class="alert-title-group">
+        <div class="alert-pill-dot ${det.severity}"></div>
+        <div class="alert-label">${det.class_label || info.label}</div>
+      </div>
+      <div class="alert-score">${(det.confidence || 0).toFixed(1)}%</div>
+    </div>
+    <div class="alert-meta-grid">
+      <div>GPS: <span>${lat}, ${lon}</span></div>
+      <div>Size: <span>${len} × ${wid}</span></div>
+    </div>
+  `;
+
+  container.insertBefore(card, container.firstChild);
+}
+
+function addMapMarker(det) {
+  if (!det.location || !det.location.latitude || !det.location.longitude) return;
+
+  const lat = det.location.latitude;
+  const lon = det.location.longitude;
+  const info = CLASS_PALETTE[det.class_name] || { color: '#00d4ff' };
+
+  const marker = L.circleMarker([lat, lon], {
+    radius: 7,
+    color: info.color,
+    fillColor: info.color,
+    fillOpacity: 0.85,
+    weight: 2,
+  });
+
+  const popupHtml = `
+    <div style="font-family:Outfit,sans-serif;font-size:12px;min-width:140px">
+      <b style="color:${info.color}">${det.class_label || det.class_name}</b><br>
+      <b>ID:</b> ${det.id}<br>
+      <b>Conf:</b> ${(det.confidence||0).toFixed(1)}%<br>
+      <b>Seabed Size:</b> ${det.estimated_size_m?.length_m || 0}m × ${det.estimated_size_m?.width_m || 0}m<br>
+      <b>Lat/Lon:</b> ${lat.toFixed(5)}, ${lon.toFixed(5)}
+    </div>
+  `;
+  marker.bindPopup(popupHtml);
+  marker.on('click', () => selectDetection(det));
+
+  STATE.markersLayer.addLayer(marker);
+}
+
+function selectDetection(det) {
+  STATE.selectedDetection = det;
+
+  document.querySelectorAll('.alert-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById(`card-${det.id}`);
+  if (card) {
+    card.classList.add('selected');
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  if (det.location && det.location.latitude && det.location.longitude) {
+    STATE.map.panTo([det.location.latitude, det.location.longitude], { animate: true });
+  }
+
+  drawSvgDetections(STATE.detections);
+  populateInspector(det);
+}
+
+function populateInspector(det) {
+  document.getElementById('inspect-empty').style.display = 'none';
+  const content = document.getElementById('inspect-content');
+  content.style.display = 'flex';
+
+  document.getElementById('inspect-badge').textContent = det.id;
+  document.getElementById('ins-id').textContent = det.id;
+  document.getElementById('ins-class').textContent = det.class_label || det.class_name;
+
+  const sevElem = document.getElementById('ins-sev');
+  sevElem.className = `inspect-sev ${det.severity || 'low'}`;
+  sevElem.textContent = det.severity || 'low';
+
+  const lat = det.location?.latitude ? det.location.latitude.toFixed(6) : '—';
+  const lon = det.location?.longitude ? det.location.longitude.toFixed(6) : '—';
+  document.getElementById('ins-lat').textContent = lat;
+  document.getElementById('ins-lon').textContent = lon;
+
+  const len = det.estimated_size_m?.length_m ? `${det.estimated_size_m.length_m} m` : '—';
+  const wid = det.estimated_size_m?.width_m ? `${det.estimated_size_m.width_m} m` : '—';
+  document.getElementById('ins-len').textContent = len;
+  document.getElementById('ins-wid').textContent = wid;
+
+  document.getElementById('ins-rg').textContent = wid;
+  document.getElementById('ins-rs').textContent = `${(parseFloat(wid) * 1.12 || 12).toFixed(1)} m`;
+
+  const scores = det.scores || {};
+  const yoloScore   = scores.yolo_confidence   ? Math.round(scores.yolo_confidence * 100)   : Math.round(det.confidence || 82);
+  const shadowScore = scores.shadow_score      ? Math.round(scores.shadow_score * 100)      : Math.round(det.confidence * 0.9);
+  const morphScore  = scores.morphology_score  ? Math.round(scores.morphology_score * 100)  : Math.round(det.confidence * 0.95);
+  const texScore    = scores.texture_score     ? Math.round(scores.texture_score * 100)     : Math.round(det.confidence * 0.85);
+
+  document.getElementById('bar-val-yolo').textContent = `${yoloScore}%`;
+  document.getElementById('bar-fill-yolo').style.width = `${yoloScore}%`;
+
+  document.getElementById('bar-val-shadow').textContent = `${shadowScore}%`;
+  document.getElementById('bar-fill-shadow').style.width = `${shadowScore}%`;
+
+  document.getElementById('bar-val-morph').textContent = `${morphScore}%`;
+  document.getElementById('bar-fill-morph').style.width = `${morphScore}%`;
+
+  document.getElementById('bar-val-tex').textContent = `${texScore}%`;
+  document.getElementById('bar-fill-tex').style.width = `${texScore}%`;
+
+  document.getElementById('ins-calibrated-score').textContent = `${(det.confidence || 0).toFixed(1)}%`;
+}
+
+function updateVesselTrack(lat, lon, heading = 0) {
+  if (!lat || !lon) return;
+
+  STATE.trackPolyline.addLatLng([lat, lon]);
+  STATE.fishMarker.setLatLng([lat, lon]);
+
+  document.getElementById('map-point-count').textContent = STATE.trackPolyline.getLatLngs().length;
+  document.getElementById('map-fish-coords').textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+}
+
+// ── Geotagging & Survey Parameter Helpers ───────────────────────
+function toggleSurveyDrawer() {
+  const drawer = document.getElementById('survey-drawer');
+  drawer.classList.toggle('open');
+}
+
+function handleFrequencyChange(freq) {
+  STATE.survey.frequency = freq;
+  STATE.survey.rangeM = FREQ_SWATH_MAP[freq] || 50.0;
+  updateSurveyTelemetryBar();
+}
+
+const DATASET_PRESETS = {
+  'bay_bengal': {
+    name: 'Bay of Bengal Trench',
+    lat: 13.0827,
+    lon: 80.2707,
+    freq: '300kHz',
+    swath: 100.0,
+    alt: 12.0,
+    layback: 25.0,
+    hdg: 90.0,
+    sample: 'sonar_test_02.png',
+    zoom: 13
+  },
+  'arabian_sea': {
+    name: 'Arabian Sea Offshore',
+    lat: 18.9220,
+    lon: 72.8347,
+    freq: '900kHz',
+    swath: 30.0,
+    alt: 7.5,
+    layback: 10.0,
+    hdg: 315.0,
+    sample: 'sonar_test_03.png',
+    zoom: 13
+  },
+  'indian_ocean': {
+    name: 'Deep Indian Ocean',
+    lat: 6.5000,
+    lon: 78.5000,
+    freq: '100kHz',
+    swath: 150.0,
+    alt: 15.0,
+    layback: 35.0,
+    hdg: 180.0,
+    sample: 'sonar_test_04.png',
+    zoom: 13
+  },
+  'bangalore': {
+    name: 'Demo Testing Basin',
+    lat: 12.9716,
+    lon: 77.5946,
+    freq: '600kHz',
+    swath: 50.0,
+    alt: 10.0,
+    layback: 15.0,
+    hdg: 45.0,
+    sample: 'sonar_test_01.png',
+    zoom: 13
+  }
+};
+
+async function applyLocationPreset(preset) {
+  const cfg = DATASET_PRESETS[preset] || DATASET_PRESETS['bangalore'];
+
+  // 1. Update State
+  STATE.survey.originLat = cfg.lat;
+  STATE.survey.originLon = cfg.lon;
+  STATE.survey.frequency = cfg.freq;
+  STATE.survey.rangeM = cfg.swath;
+  STATE.survey.towfishAltitudeM = cfg.alt;
+  STATE.survey.laybackM = cfg.layback;
+  STATE.survey.headingDeg = cfg.hdg;
+
+  // 2. Synchronize Form Inputs
+  const cfgPresetEl = document.getElementById('cfg-preset');
+  if (cfgPresetEl) cfgPresetEl.value = preset;
+  const topPresetEl = document.getElementById('top-dataset-select');
+  if (topPresetEl) topPresetEl.value = preset;
+
+  const latEl = document.getElementById('cfg-lat');
+  if (latEl) latEl.value = cfg.lat;
+  const lonEl = document.getElementById('cfg-lon');
+  if (lonEl) lonEl.value = cfg.lon;
+  const freqEl = document.getElementById('cfg-freq');
+  if (freqEl) freqEl.value = cfg.freq;
+  const altEl = document.getElementById('cfg-alt');
+  if (altEl) altEl.value = cfg.alt;
+  const layEl = document.getElementById('cfg-layback');
+  if (layEl) layEl.value = cfg.layback;
+  const hdgEl = document.getElementById('cfg-hdg');
+  if (hdgEl) hdgEl.value = cfg.hdg;
+
+  // 3. Update Telemetry Sub-bar
+  updateSurveyTelemetryBar();
+
+  // 4. Immediately Pan / Fly Map to the new ocean region
+  if (STATE.map) {
+    STATE.map.flyTo([cfg.lat, cfg.lon], cfg.zoom, { duration: 1.0 });
+  }
+  if (STATE.fishMarker) {
+    STATE.fishMarker.setLatLng([cfg.lat, cfg.lon]);
+  }
+
+  // 5. Automatically load and analyze the corresponding dataset sonar image
+  showToast(`Switching to dataset: ${cfg.name} (${cfg.freq})...`, 'info');
+  await analyzeSampleImage(cfg.sample);
+}
+
+async function saveSurveyParameters() {
+  STATE.survey.frequency = document.getElementById('cfg-freq').value;
+  STATE.survey.rangeM = FREQ_SWATH_MAP[STATE.survey.frequency] || 50.0;
+  STATE.survey.originLat = parseFloat(document.getElementById('cfg-lat').value) || 12.9716;
+  STATE.survey.originLon = parseFloat(document.getElementById('cfg-lon').value) || 77.5946;
+  STATE.survey.headingDeg = parseFloat(document.getElementById('cfg-hdg').value) || 45.0;
+  STATE.survey.towfishAltitudeM = parseFloat(document.getElementById('cfg-alt').value) || 10.0;
+  STATE.survey.laybackM = parseFloat(document.getElementById('cfg-layback').value) || 15.0;
+
+  const cartoInput = document.getElementById('cfg-carto-key');
+  if (cartoInput) {
+    STATE.cartoApiKey = cartoInput.value.trim();
+    localStorage.setItem('carto_api_key', STATE.cartoApiKey);
+    if (STATE.currentTileType === 'dark') {
+      setMapLayer('dark');
+    }
+  }
+
+  updateSurveyTelemetryBar();
+  toggleSurveyDrawer();
+
+  if (STATE.map) {
+    STATE.map.flyTo([STATE.survey.originLat, STATE.survey.originLon], 14, { duration: 1.0 });
+  }
+  if (STATE.fishMarker) {
+    STATE.fishMarker.setLatLng([STATE.survey.originLat, STATE.survey.originLon]);
+  }
+
+  showToast('Survey Geotagging Parameters Updated — Re-analyzing with new coordinates...', 'success');
+  const targetImg = STATE.currentSampleFile || 'sonar_test_01.png';
+  await analyzeSampleImage(targetImg);
+}
+
+function updateSurveyTelemetryBar() {
+  document.getElementById('geo-freq-val').textContent = STATE.survey.frequency;
+  document.getElementById('geo-swath-val').textContent = `${(STATE.survey.rangeM * 2).toFixed(0)}m (±${STATE.survey.rangeM.toFixed(0)}m)`;
+  document.getElementById('geo-alt-val').textContent = `${STATE.survey.towfishAltitudeM.toFixed(1)}m`;
+  document.getElementById('geo-layback-val').textContent = `${STATE.survey.laybackM.toFixed(1)}m`;
+  document.getElementById('geo-origin-val').textContent = `${STATE.survey.originLat.toFixed(5)}° N, ${STATE.survey.originLon.toFixed(5)}° E`;
+  document.getElementById('geo-heading-val').textContent = `${String(Math.round(STATE.survey.headingDeg)).padStart(3,'0')}°`;
+  document.getElementById('bar-swath-val').textContent = `${STATE.survey.rangeM.toFixed(0)} m`;
+}
+
+// ── Mode Switcher & Navigation ──────────────────────────────────
+function setDashboardMode(mode) {
+  STATE.mode = mode;
+  document.getElementById('tab-live').classList.toggle('active', mode === 'live');
+  document.getElementById('tab-analysis').classList.toggle('active', mode === 'analysis');
+
+  const overlay = document.getElementById('drop-zone-overlay');
+  if (mode === 'analysis') {
+    if (!currentLoadedImage) {
+      overlay.style.display = 'flex';
+    }
+    updateSysStatus('DIRECT ANALYSIS MODE READY', 'standby');
+  } else {
+    overlay.style.display = 'none';
+    connectLiveWS();
+    updateSysStatus('CONNECTING LIVE STREAM...', 'busy');
+  }
+}
+
+function updateSysStatus(text, statusType = 'live') {
+  document.getElementById('sys-status').textContent = text;
+  const pulse = document.getElementById('sys-pulse');
+  pulse.className = `pulse-dot ${statusType}`;
+}
+
+// ── Overlay Options & Filtering ────────────────────────────────
+function toggleOverlayOption(opt) {
+  STATE.overlay[opt] = !STATE.overlay[opt];
+  const btn = document.getElementById(`tgl-${opt === 'dimensions' ? 'dim' : (opt === 'labels' ? 'lbl' : opt)}`);
+  if (btn) btn.classList.toggle('active', STATE.overlay[opt]);
+
+  if (opt === 'nadir') {
+    document.getElementById('nadir-line').classList.toggle('visible', STATE.overlay.nadir);
+  } else {
+    drawSvgDetections(STATE.detections);
+  }
+}
+
+function filterBySeverity(sev, chipElem = null) {
+  STATE.activeFilter = sev;
+
+  document.querySelectorAll('.stat-box').forEach(b => b.classList.remove('active'));
+  if (sev === 'all') document.querySelector('.stat-box.tot').classList.add('active');
+  if (sev === 'critical') document.querySelector('.stat-box.crit').classList.add('active');
+  if (sev === 'moderate') document.querySelector('.stat-box.mod').classList.add('active');
+  if (sev === 'low') document.querySelector('.stat-box.low').classList.add('active');
+
+  document.querySelectorAll('.feed-filter-row .chip').forEach(c => c.classList.remove('active'));
+  if (chipElem) chipElem.classList.add('active');
+
+  document.querySelectorAll('.alert-card').forEach(card => {
+    if (sev === 'all' || card.classList.contains(sev)) {
+      card.style.display = 'flex';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+
+  drawSvgDetections(STATE.detections);
+}
+
+// ── Export Suite ───────────────────────────────────────────────
+function exportData(format) {
+  if (STATE.activeJobId) {
+    if (format === 'csv') {
+      window.open(`/api/results/${STATE.activeJobId}/report.csv`, '_blank');
+    } else if (format === 'geojson') {
+      window.open(`/api/results/${STATE.activeJobId}/report.geojson`, '_blank');
+    } else if (format === 'json') {
+      window.open(`/api/results/${STATE.activeJobId}/report.json`, '_blank');
+    }
+  } else if (STATE.sessionId) {
+    if (format === 'csv') {
+      window.open(`/edge/sessions/${STATE.sessionId}/export.csv`, '_blank');
+    } else if (format === 'geojson') {
+      window.open(`/edge/sessions/${STATE.sessionId}/export.geojson`, '_blank');
+    }
+  } else {
+    if (STATE.detections.length === 0) {
+      showToast('No detections available to export', 'alert');
+      return;
+    }
+    if (format === 'geojson') {
+      exportClientGeoJSON();
+    } else if (format === 'csv') {
+      exportClientCSV();
+    }
+  }
+}
+
+function exportClientGeoJSON() {
+  const geojson = {
+    type: "FeatureCollection",
+    features: STATE.detections.map(d => ({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [d.location?.longitude || 0, d.location?.latitude || 0],
+      },
+      properties: {
+        id: d.id,
+        class: d.class_name,
+        label: d.class_label,
+        confidence: d.confidence,
+        severity: d.severity,
+        dimensions: d.estimated_size_m,
+      },
+    })),
+  };
+  downloadBlob(JSON.stringify(geojson, null, 2), "sonar_detections.geojson", "application/geo+json");
+}
+
+function exportClientCSV() {
+  let csv = "detection_id,class_name,confidence,severity,latitude,longitude,est_length_m,est_width_m\n";
+  STATE.detections.forEach(d => {
+    csv += `${d.id},${d.class_name},${d.confidence},${d.severity},${d.location?.latitude||""},${d.location?.longitude||""},${d.estimated_size_m?.length_m||""},${d.estimated_size_m?.width_m||""}\n`;
+  });
+  downloadBlob(csv, "sonar_detections.csv", "text/csv");
+}
+
+function downloadBlob(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function copyInspectorGPS() {
+  if (!STATE.selectedDetection?.location) return;
+  const { latitude, longitude } = STATE.selectedDetection.location;
+  const text = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+  navigator.clipboard.writeText(text);
+  showToast(`Copied to clipboard: ${text}`, 'success');
+}
+
+function openGoogleMaps() {
+  if (!STATE.selectedDetection?.location) return;
+  const { latitude, longitude } = STATE.selectedDetection.location;
+  window.open(`https://maps.google.com/?q=${latitude},${longitude}`, '_blank');
+}
+
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${type === 'success' ? '✓' : (type === 'alert' ? '⚠' : 'ℹ')}</span> <div>${msg}</div>`;
+  container.appendChild(t);
+  setTimeout(() => t.remove(), 4500);
+}
+
+// ── App Startup ────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const cKeyInput = document.getElementById('cfg-carto-key');
+  if (cKeyInput && STATE.cartoApiKey) {
+    cKeyInput.value = STATE.cartoApiKey;
+  }
+  initMap();
+  resizeCanvas();
+  updateSurveyTelemetryBar();
+});
+</script>
+</body>
+</html>

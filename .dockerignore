@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+.env
+.venv
+env/
+venv/
+.pytest_cache/
+tests/benchmark_results_*.json

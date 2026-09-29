@@ -1,0 +1,36 @@
+[Unit]
+Description=SENORITA — SSS Marine Debris Detection & Geotagging Edge Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=sonar
+Group=sonar
+WorkingDirectory=/opt/sonar_detection
+Environment="PYTHONPATH=/opt/sonar_detection"
+Environment="PYTHONUNBUFFERED=1"
+
+# ── Adjust --interface and --source for your hardware ──────────
+# Serial SSS unit:
+#   ExecStart=python3 edge_main.py --interface serial --port /dev/ttyUSB0 --baud 115200
+# UDP SSS unit:
+#   ExecStart=python3 edge_main.py --interface udp --udp-port 4000
+# XTF file replay (testing):
+#   ExecStart=python3 edge_main.py --interface xtf --source /data/survey.xtf --loop
+ExecStart=python3 edge_main.py --interface file --source /opt/sonar_detection/uploads/ --loop --platform auto
+
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits for embedded hardware
+MemoryMax=4G
+CPUQuota=80%
+
+# Allow GPIO access (Jetson/RPi)
+SupplementaryGroups=gpio i2c
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+names:
+- ghost_net
+- shipwreck
+- pipe
+- cylinder
+- debris_cluster
+- cable
+- anomaly
+nc: 7
+path: data/sonar_dataset
+test: images/test
+train: images/train
+val: images/val

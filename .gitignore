@@ -1,0 +1,72 @@
+# Byte-compiled / optimized / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+*.cache
+
+# Environment files and credentials (security / privacy)
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.token
+*.secret
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Databases and local runtime logs (hides local runtime data)
+*.db
+*.sqlite
+*.sqlite3
+*.log
+data/detections.db
+data/logs/*
+!data/logs/.gitkeep
+data/reports/*
+!data/reports/.gitkeep
+logs/
+
+# Heavy training runs and checkpoints (>80MB)
+runs/
+*.pt.backup
+
+# Local runtime uploads and test outputs
+uploads/*
+!uploads/.gitkeep
+uploads/results/*
+
+# Benchmark run results and test logs
+tests/benchmark_results*.json
+tests/benchmark_log.txt
+tests/*.sqlite
+
+# Augmented dataset cache and evaluation output dumps
+training/eval_results/
+data/sonar_augmented/
+data/images/
+
+# Non-implementation presentation & report documents
+*.pptx
+*.pdf
+build_presentation.py
+generate_pdf_guide.py
+export_pdf.ps1
+FINAL_REPORT.md
+reconciliation_note.md
+
+# Pretrained generic weights (downloaded automatically by Ultralytics)
+yolov8s.pt
+
+# OS & IDE metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
