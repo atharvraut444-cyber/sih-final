@@ -11,13 +11,20 @@ from pathlib import Path
 # ─── Project Paths ──────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent
 MODELS_DIR = BASE_DIR / "models"
-UPLOADS_DIR = BASE_DIR / "uploads"
+
+# On Vercel / serverless platforms, only /tmp is writable
+if os.environ.get("VERCEL"):
+    UPLOADS_DIR = Path("/tmp/uploads")
+else:
+    UPLOADS_DIR = BASE_DIR / "uploads"
+
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 
 # Ensure required directories exist
-UPLOADS_DIR.mkdir(exist_ok=True)
-(UPLOADS_DIR / "results").mkdir(exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+(UPLOADS_DIR / "results").mkdir(parents=True, exist_ok=True)
+
 
 # ─── Model Configuration ────────────────────────────────────────
 MODEL_WEIGHTS = MODELS_DIR / "yolov8_sonar.pt"
@@ -174,6 +181,6 @@ DEFAULT_SPEED_KNOTS = 3.0          # Default vessel speed
 
 # ─── API Configuration ──────────────────────────────────────────
 API_HOST = "0.0.0.0"
-API_PORT = 8000
+API_PORT = int(os.environ.get("PORT", 8000))
 MAX_UPLOAD_SIZE_MB = 200
 ALLOWED_EXTENSIONS = {".tiff", ".tif", ".png", ".jpg", ".jpeg", ".bmp"}
